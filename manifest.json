@@ -4,23 +4,21 @@
   "name": "CS",
   "version": "1.0",
   "icons": {
-    "48": "assets/icons/beasts-48.png"
+    "48": "assets/icons/baron_logo.png"
   },
   "permissions": [
     "notifications",
     "activeTab",
     "http://*/*", 
-    "https://*/*",
-    "fileSystem",
-    "unlimitedStorage"
+    "https://*/*"
   ],
   "content_security_policy": "script-src 'self' https://ajax.googleapis.com https://maxcdn.bootstrapcdn.com; object-src 'self'",
   "browser_action": {
-    "default_icon": "assets/icons/beasts-32.png",
+    "default_icon": "assets/icons/baron_logo.png",
     "theme_icons": [
       {
-        "light": "assets/icons/beasts-32-light.png",
-        "dark": "assets/icons/beasts-32.png",
+        "light": "assets/icons/baron_logo.png",
+        "dark": "assets/icons/baron_logo.png",
         "size": 32
       }
     ],
@@ -31,5 +29,5 @@
   "background": {
     "service_worker": "./assets/js/background.js"
   },
-  "web_accessible_resources": ["./assets/mp3/alert sound.wav"]
+  "web_accessible_resources": ["./assets/wav/alert sound.wav"]
 }

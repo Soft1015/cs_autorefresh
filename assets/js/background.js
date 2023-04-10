@@ -1,42 +1,43 @@
 // The code below is in charge of keeping the background script alive to update the badge and refresh the page on time.
-
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let scrapingInfo = {};
+let listener = null;
 chrome.runtime.onMessage.addListener(function (req, sender, sendResponse) {
   if (req.cmd == "startScraping") {
-    console.log(chrome.fileSystemProvider);
     scrapingInfo.interval = req.interval;
     scrapingInfo.isActive = true;
+    scrapingInfo.url = "";
     if (req.url) {
       const myArray = req.url.split("|");
       let array = [];
       myArray.forEach((element) => {
-        const data = JSON.parse(element);
+        let data = JSON.parse(element);
         if (data.checked) {
-          array.push(data.url);
+          let url = data.url.split('?')[1];
+          scrapingInfo.originUrl = data.url;
+          scrapingInfo.url = "https://skinbaron.de/api/v2/Browsing/FilterOffers?appId=730&" + url + "&language=en";
         }
       });
-      scrapingInfo.url = array;
-    } else {
-      scrapingInfo.url = [];
-    }
-    if (req.listB) {
-      const myArray = req.listB.split("|");
-      let array = [];
-      myArray.forEach((element) => {
-        const data = JSON.parse(element);
-        array.push(data);
+    } 
+    if(scrapingInfo.url == ""){
+      chrome.notifications.create({
+        type: "basic",
+        iconUrl: "../icons/beasts-32-light.png",
+        title: "Warnning!",
+        message: "Please activate one of urls",
       });
-      scrapingInfo.listB = array;
-    } else {
-      scrapingInfo.listB = [];
+      sendResponse({result:'false'});
+      return;
     }
+    scrapingInfo.startedChecking = false;
+    scrapingInfo.ListA = [];
+    scrapingInfo.item9 = -1;
     startScraping(req.interval);
   }
   if (req.cmd == "stopScraping") {
     stopScraping();
   }
-  sendResponse({});
+  sendResponse({result:'true'});
 });
 
 async function updateUIState() {
@@ -59,13 +60,17 @@ async function updateUIState() {
 }
 
 async function startScraping(interval) {
-  await loadData();
   scrapingInfo.nextRefresh = Date.now() + interval;
+  if (!scrapingInfo.startedChecking) await MemorizeList();
   while (scrapingInfo.isActive) {
     await updateUIState();
     if (scrapingInfo.nextRefresh < Date.now()) {
       try {
-        if (scrapingInfo.isActive) startScraping(interval);
+        if (scrapingInfo.isActive) {
+          const start_time = new Date();
+          await CheckItem();
+          if (!scrapingInfo.startedChecking) await MemorizeList();
+        }
       } catch (e) {
         console.log("ERROR REFRESHING TAB:", e);
       }
@@ -82,57 +87,93 @@ function stopScraping() {
   updateUIState();
 }
 
+async function MemorizeList() {
+  const res = await loadData();
+  if (!res) return;
+  scrapingInfo.ListA = [];
+  scrapingInfo.item9 = [];
+  const len = res?.aggregatedMetaOffers?.length > 9 ? 9 : res?.aggregatedMetaOffers?.length;
+  for (var i = 0; i < len; i++) {
+    if (i > 7) {
+      scrapingInfo.item9 = (res.aggregatedMetaOffers[i].id ? res?.aggregatedMetaOffers[i].id : -1);
+    } else {
+      scrapingInfo.ListA.push(res.aggregatedMetaOffers[i].id ? res?.aggregatedMetaOffers[i].id : -1);
+    }
+  }
+  scrapingInfo.startedChecking = true;
+}
+
+async function CheckItem() {
+  const res = await loadData();
+  if (!res) return;
+  let items = [],
+    newItems = [],
+    finalItems = [];
+  let len =res?.aggregatedMetaOffers?.length > 8 ? 8 : res?.aggregatedMetaOffers?.length;
+  for (var i = 0; i < len; i++) {
+    items.push(res?.aggregatedMetaOffers[i] ? res.aggregatedMetaOffers[i] : null);
+  }
+  //First compare
+  len = items?.length;
+  for (var i = 0; i < len; i++) {
+    if (!scrapingInfo.ListA.includes(items?.[i]?.id)) {
+      newItems.push(items?.[i]);
+    }
+  }
+
+  if (!newItems) return;
+  //Sencod compare
+  for (var i = 0; i < newItems?.length; i++) {
+    if (scrapingInfo.item9 != newItems?.[i]?.id) {
+      finalItems.push(newItems?.[i]);
+    }
+  }
+  if (finalItems.length > 0) {
+    const names = finalItems.map(item => item?.extendedProductInformation?.localizedName).join(',');
+    chrome.notifications.create({
+      type: "basic",
+      iconUrl: "../icons/baron_logo.png",
+      title: finalItems.length + " New Items was created!!!",
+      message: names,
+    });
+    chrome.notifications.onClicked.removeListener(listener);
+    chrome.notifications.onClicked.addListener(listener);
+    listener = function(notificationId) {
+      chrome.tabs.create({ url: scrapingInfo.originUrl });
+      chrome.notifications.clear(notificationId);
+    }
+    scrapingInfo.ListA = [];
+    scrapingInfo.item9 = [];
+    const len = res?.aggregatedMetaOffers?.length > 9 ? 9 : res?.aggregatedMetaOffers?.length;
+    for (var i = 0; i < len; i++) {
+      if (i > 7) {
+        scrapingInfo.item9 = (res.aggregatedMetaOffers[i].id ? res?.aggregatedMetaOffers[i].id : -1);
+      } else {
+        scrapingInfo.ListA.push(res.aggregatedMetaOffers[i].id ? res?.aggregatedMetaOffers[i].id : -1);
+      }
+    }
+
+  }
+  //play sound
+}
+
 async function loadData() {
-  var proxy = "https://cors-anywhere.herokuapp.com/";
-  const json_url =
-    proxy +
-    "https://skinbaron.de/api/v2/Browsing/FilterOffers?appId=730&sort=NF&wub=99&qf=2&qf=4&qf=6&qf=8&qf=10&qf=12&language=en";
   let response = null;
   try {
-    response = await fetch(json_url, {
-      method: "get",
-      headers: {
-        "X-API-KEY": "apikey",
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
-    });
-  } catch (err) {
-    // not jumping in here.
-    // console.log(err);
-  }
-  //   console.log("ddddddddddd");
-  //   var audio = new Audio("../wav/alertsound.wav");
-  //   audio.play();
-
-  chrome.notifications.create({
-    type: "basic",
-    iconUrl: "../icons/beasts-32-light.png",
-    title: "New Item",
-    message: "This is a notification from my Chrome extension",
-  });
-  saveDataToFile();
-}
-function saveDataToFile() {
-  var fs = chrome.fileSystem;
-  // Request access to the file system
-  fs.requestWritableFileSystem(function (fileSystem) {
-    // Create a file in the root directory
-    fileSystem.root.getFile(
-      "mydata.txt",
-      { create: true },
-      function (fileEntry) {
-        // Create a FileWriter object
-        fileEntry.createWriter(function (fileWriter) {
-          // Write the data to the file
-          var data = "Hello, world!";
-          var blob = new Blob([data], { type: "text/plain" });
-          fileWriter.write(blob);
-
-          // Log a message to the console
-          console.log("Data written to file");
-        });
+    response = await fetch(
+      scrapingInfo.url,
+      {
+        method: "get",
+        headers: {
+          "X-API-KEY": "213398-29d2f887-2e57-4df3-add9-903e2ed6394c",
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
       }
     );
-  });
+  } catch (err) {
+    console.log(err);
+  }
+  response = await response.json();
+  return response;
 }
