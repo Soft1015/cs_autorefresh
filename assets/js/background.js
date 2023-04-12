@@ -1,7 +1,8 @@
 // The code below is in charge of keeping the background script alive to update the badge and refresh the page on time.
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let scrapingInfo = {};
-let listener = null;
+var notificationIds = [];
+scrapingInfo.startedChecking = false;
 chrome.runtime.onMessage.addListener(function (req, sender, sendResponse) {
   if (req.cmd == "startScraping") {
     scrapingInfo.interval = req.interval;
@@ -16,6 +17,9 @@ chrome.runtime.onMessage.addListener(function (req, sender, sendResponse) {
           let url = data.url.split('?')[1];
           scrapingInfo.originUrl = data.url;
           scrapingInfo.url = "https://skinbaron.de/api/v2/Browsing/FilterOffers?appId=730&" + url + "&language=en";
+          chrome.tabs.update({ url: scrapingInfo.originUrl }, function(tab) {
+            scrapingInfo.tabId = tab.id;
+          });
         }
       });
     } 
@@ -36,6 +40,8 @@ chrome.runtime.onMessage.addListener(function (req, sender, sendResponse) {
   }
   if (req.cmd == "stopScraping") {
     stopScraping();
+  }else if(req.cmd == "getState"){
+    sendResponse({result:scrapingInfo.isActive});
   }
   sendResponse({result:'true'});
 });
@@ -44,6 +50,7 @@ async function updateUIState() {
   const newState = {};
   if (scrapingInfo.isActive) {
     let timeLeft = Math.ceil((scrapingInfo.nextRefresh - Date.now()) / 1000);
+    console.log('timeLeft===>' + timeLeft);
     if (scrapingInfo.interval < 1000 && timeLeft == 1)
       timeLeft = scrapingInfo.interval / 1000;
     newState.badgeText = timeLeft.toString();
@@ -63,11 +70,11 @@ async function startScraping(interval) {
   scrapingInfo.nextRefresh = Date.now() + interval;
   if (!scrapingInfo.startedChecking) await MemorizeList();
   while (scrapingInfo.isActive) {
-    await updateUIState();
+    // await updateUIState();
     if (scrapingInfo.nextRefresh < Date.now()) {
       try {
         if (scrapingInfo.isActive) {
-          const start_time = new Date();
+          console.log('isActive');
           await CheckItem();
           if (!scrapingInfo.startedChecking) await MemorizeList();
         }
@@ -120,44 +127,63 @@ async function CheckItem() {
       newItems.push(items?.[i]);
     }
   }
-
-  if (!newItems) return;
+  if (newItems.length == 0) return;
   //Sencod compare
-  for (var i = 0; i < newItems?.length; i++) {
-    if (scrapingInfo.item9 != newItems?.[i]?.id) {
-      finalItems.push(newItems?.[i]);
+  
+
+  if (scrapingInfo.item9 != newItems?.[0]?.id) {
+    finalItems.push(newItems?.[0]);
+  }
+
+  scrapingInfo.ListA = [];
+  scrapingInfo.item9 = [];
+  const lenth = res?.aggregatedMetaOffers?.length > 9 ? 9 : res?.aggregatedMetaOffers?.length;
+  for (var i = 0; i < lenth; i++) {
+    if (i > 7) {
+      scrapingInfo.item9 = (res.aggregatedMetaOffers[i].id ? res?.aggregatedMetaOffers[i].id : -1);
+    } else {
+      scrapingInfo.ListA.push(res.aggregatedMetaOffers[i].id ? res?.aggregatedMetaOffers[i].id : -1);
     }
   }
+
   if (finalItems.length > 0) {
-    const names = finalItems.map(item => item?.extendedProductInformation?.localizedName).join(',');
     chrome.notifications.create({
       type: "basic",
       iconUrl: "../icons/baron_logo.png",
       title: finalItems.length + " New Items was created!!!",
-      message: names,
+      message: finalItems[0].extendedProductInformation?.localizedName,
+    }, function(notificationId){
+      notificationIds.push(notificationId);
     });
-    chrome.notifications.onClicked.removeListener(listener);
-    chrome.notifications.onClicked.addListener(listener);
-    listener = function(notificationId) {
-      chrome.tabs.create({ url: scrapingInfo.originUrl });
-      chrome.notifications.clear(notificationId);
-    }
-    scrapingInfo.ListA = [];
-    scrapingInfo.item9 = [];
-    const len = res?.aggregatedMetaOffers?.length > 9 ? 9 : res?.aggregatedMetaOffers?.length;
-    for (var i = 0; i < len; i++) {
-      if (i > 7) {
-        scrapingInfo.item9 = (res.aggregatedMetaOffers[i].id ? res?.aggregatedMetaOffers[i].id : -1);
-      } else {
-        scrapingInfo.ListA.push(res.aggregatedMetaOffers[i].id ? res?.aggregatedMetaOffers[i].id : -1);
-      }
-    }
 
+    // chrome.tabs.query({ url: scrapingInfo.originUrl }, function(tabs) {
+    //   if (tabs.length > 0) {
+    //     chrome.tabs.update(scrapingInfo.tabId, { active: true });
+    //     chrome.tabs.executeScript({ code: "document.querySelector('#offer-container > div.product-pagination > sb-one-sided-pagination > ul > li.page-item.pagination-page.active > button').click();" });
+    //   }
+    // });
+
+    chrome.notifications.onClicked.addListener(function(notificationId) {
+      if (notificationIds.indexOf(notificationId) === -1) {
+        return;
+      }
+      var index = notificationIds.indexOf(notificationId);
+      chrome.tabs.getCurrent(function(tab) {
+        console.log(tab);
+      });
+      chrome.notifications.clear(notificationId);
+      notificationIds.splice(notificationIds.indexOf(notificationId), 1);
+    });
+    // scrapingInfo.startedChecking = false;
   }
-  //play sound
 }
 
+chrome.runtime.onSuspend.addListener(() => {
+  stopScraping();
+});
+
 async function loadData() {
+  console.log(scrapingInfo.url);
   let response = null;
   try {
     response = await fetch(
@@ -171,9 +197,9 @@ async function loadData() {
         },
       }
     );
+  response = await response.json();
   } catch (err) {
     console.log(err);
   }
-  response = await response.json();
   return response;
 }

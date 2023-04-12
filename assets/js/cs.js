@@ -1,8 +1,8 @@
 function activateListeners() {
   $("#btn-start").click(function () {
     if (!started) {
-      if(!localStorage.getItem("url")){
-        alert('please set the url');
+      if (!localStorage.getItem("url")) {
+        alert("please set the url");
         return;
       }
       chrome.runtime.sendMessage(
@@ -12,7 +12,7 @@ function activateListeners() {
           url: localStorage.getItem("url"),
         },
         function (res) {
-          if(res.result == 'true'){
+          if (res.result == "true") {
             started = true;
             localStorage.setItem("started", "true");
             $("#btn-start").text("Stop");
@@ -26,10 +26,9 @@ function activateListeners() {
       $("btn-start").css("background-color", "green");
       localStorage.setItem("started", "false");
       $("#btn-start").text("Start");
-      chrome.runtime.sendMessage({ cmd: "stopScraping",}, function (res) {
-          console.log(res);
-        }
-      );
+      chrome.runtime.sendMessage({ cmd: "stopScraping" }, function (res) {
+        console.log(res);
+      });
     }
   });
 }
@@ -37,9 +36,12 @@ var started = false;
 $("#addRowUrl").click(function () {
   var html = "<tr>";
   html += "<td></td>";
-  html += "<td class='text-center'><input type='text' class='form-control'></td>";
-  html += "<td class='text-center'><div class='radio'><label><input type='radio' name='optradio'></label></div></td>";
-  html += "<td class='text-center'><button type='button' class='btn btn-danger btn-sm btn-url-del'>X</button></td></tr>";
+  html +=
+    "<td class='text-center'><input type='text' class='form-control'></td>";
+  html +=
+    "<td class='text-center'><div class='radio'><label><input type='radio' name='optradio'></label></div></td>";
+  html +=
+    "<td class='text-center'><button type='button' class='btn btn-danger btn-sm btn-url-del'>X</button></td></tr>";
   $("#tbody_url").append(html);
 });
 
@@ -65,15 +67,24 @@ $("#timeSave").click(function () {
 
 function loadingDB() {
   loadUrlData();
-  if(!localStorage.getItem("time")){
+  if (!localStorage.getItem("time")) {
     localStorage.setItem("time", "3");
   }
   $("#time").val(localStorage.getItem("time"));
-  started = localStorage.getItem("started") == "true" ? true : false;
-  if (started) {
-    $("#btn-start").text("Stop");
-    $("btn-start").css("background-color", "red");
-  }
+  chrome.runtime.sendMessage({ cmd: "getState" }, function (res) {
+    if(res.result){
+      if(typeof res.result == 'object') started = res.result == "true" ? true : false;
+      else {
+        started = res.result == true ? true : false;
+      }
+    }else{
+      started = false;
+    }
+    if (started) {
+      $("#btn-start").text("Stop");
+      $("btn-start").css("background-color", "red");
+    }
+  });
 }
 
 function loadUrlData() {
@@ -89,15 +100,21 @@ function loadUrlData() {
       if (data) {
         html += "<tr>";
         html += "<td>" + i + "</td>";
-        html += "<td class='text-center'><input type='text' class='form-control' value='" + data.url + "'></td>";
-        html += "<td class='text-center'><div class='radio'><label><input type='radio' name='optradio' "+checked+"></label></div></td>";
-        html += "<td class='text-center'><button type='button' class='btn btn-danger btn-sm btn-url-del'>X</button></td></tr>";
+        html +="<td class='text-center'><input type='text' class='form-control' value='" +
+          data.url +
+          "'></td>";
+        html +=
+          "<td class='text-center'><div class='radio'><label><input type='radio' name='optradio' " +
+          checked +
+          "></label></div></td>";
+        html +=
+          "<td class='text-center'><button type='button' class='btn btn-danger btn-sm btn-url-del'>X</button></td></tr>";
         i++;
       }
     });
     $("#tbody_url").empty();
     $("#tbody_url").append(html);
-  }else{
+  } else {
     $("#btn-start").hide();
   }
 }
@@ -110,3 +127,8 @@ document.addEventListener(
   },
   false
 );
+window.addEventListener("beforeunload", function (e) {
+  chrome.runtime.sendMessage({ cmd: "stopScraping" }, function (res) {
+    localStorage.setItem("started", "false");
+  });
+});
