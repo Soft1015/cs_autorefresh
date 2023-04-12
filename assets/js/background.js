@@ -5,6 +5,7 @@ var notificationIds = [];
 scrapingInfo.startedChecking = false;
 chrome.runtime.onMessage.addListener(function (req, sender, sendResponse) {
   if (req.cmd == "startScraping") {
+    req.interval += 1000;
     scrapingInfo.interval = req.interval;
     scrapingInfo.isActive = true;
     scrapingInfo.url = "";
@@ -17,8 +18,10 @@ chrome.runtime.onMessage.addListener(function (req, sender, sendResponse) {
           let url = data.url.split('?')[1];
           scrapingInfo.originUrl = data.url;
           scrapingInfo.url = "https://skinbaron.de/api/v2/Browsing/FilterOffers?appId=730&" + url + "&language=en";
-          chrome.tabs.update({ url: scrapingInfo.originUrl }, function(tab) {
+          chrome.tabs.create({ url: scrapingInfo.originUrl }, function(tab) {
+            // The tab object contains information about the newly created tab
             scrapingInfo.tabId = tab.id;
+            console.log("New tab created with ID: " + scrapingInfo.tabId);
           });
         }
       });
@@ -36,6 +39,7 @@ chrome.runtime.onMessage.addListener(function (req, sender, sendResponse) {
     scrapingInfo.startedChecking = false;
     scrapingInfo.ListA = [];
     scrapingInfo.item9 = -1;
+    console.log('start', req.interval);
     startScraping(req.interval);
   }
   if (req.cmd == "stopScraping") {
@@ -49,14 +53,21 @@ chrome.runtime.onMessage.addListener(function (req, sender, sendResponse) {
 async function updateUIState() {
   const newState = {};
   if (scrapingInfo.isActive) {
-    let timeLeft = Math.ceil((scrapingInfo.nextRefresh - Date.now()) / 1000);
+    let timeLeft = Math.ceil((scrapingInfo.nextRefresh - Date.now()) / 1000 - 1);
+    console.log('timeLeft', timeLeft);
     console.log('timeLeft===>' + timeLeft);
     if (scrapingInfo.interval < 1000 && timeLeft == 1)
       timeLeft = scrapingInfo.interval / 1000;
+    else{
+      if(timeLeft == 0){
+        timeLeft = "R";
+      }
+    }
     newState.badgeText = timeLeft.toString();
   } else {
     newState.badgeText = "";
   }
+  console.log(newState.badgeText);
   if (
     scrapingInfo.badgeText != newState.badgeText &&
     scrapingInfo.badgeText != "0"
@@ -70,7 +81,6 @@ async function startScraping(interval) {
   scrapingInfo.nextRefresh = Date.now() + interval;
   if (!scrapingInfo.startedChecking) await MemorizeList();
   while (scrapingInfo.isActive) {
-    // await updateUIState();
     if (scrapingInfo.nextRefresh < Date.now()) {
       try {
         if (scrapingInfo.isActive) {
@@ -83,6 +93,7 @@ async function startScraping(interval) {
       }
       scrapingInfo.nextRefresh = Date.now() + interval;
     }
+    console.log('updateUIState');
     await updateUIState();
     await delay(Math.min(interval, 1000));
   }
@@ -147,34 +158,14 @@ async function CheckItem() {
   }
 
   if (finalItems.length > 0) {
-    chrome.notifications.create({
-      type: "basic",
-      iconUrl: "../icons/baron_logo.png",
-      title: finalItems.length + " New Items was created!!!",
-      message: finalItems[0].extendedProductInformation?.localizedName,
-    }, function(notificationId){
-      notificationIds.push(notificationId);
-    });
-
-    // chrome.tabs.query({ url: scrapingInfo.originUrl }, function(tabs) {
-    //   if (tabs.length > 0) {
-    //     chrome.tabs.update(scrapingInfo.tabId, { active: true });
-    //     chrome.tabs.executeScript({ code: "document.querySelector('#offer-container > div.product-pagination > sb-one-sided-pagination > ul > li.page-item.pagination-page.active > button').click();" });
-    //   }
-    // });
-
-    chrome.notifications.onClicked.addListener(function(notificationId) {
-      if (notificationIds.indexOf(notificationId) === -1) {
-        return;
+    console.log('finalItems');
+    await delay(1000);
+    chrome.tabs.query({ url: scrapingInfo.originUrl }, function(tabs) {
+      if (tabs.length > 0) {
+        chrome.tabs.update(scrapingInfo.tabId, { active: true });
+        chrome.tabs.executeScript({ code: "document.querySelector('#offer-container > div.product-pagination > sb-one-sided-pagination > ul > li.page-item.pagination-page.active > button').click();" });
       }
-      var index = notificationIds.indexOf(notificationId);
-      chrome.tabs.getCurrent(function(tab) {
-        console.log(tab);
-      });
-      chrome.notifications.clear(notificationId);
-      notificationIds.splice(notificationIds.indexOf(notificationId), 1);
     });
-    // scrapingInfo.startedChecking = false;
   }
 }
 
