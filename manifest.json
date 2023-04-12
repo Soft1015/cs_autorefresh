@@ -1,6 +1,6 @@
 {
   "description": "Adds a browser action icon to the toolbar. Click the button to choose a beast. The active tab's body content is then replaced with a picture of the chosen beast. See https://developer.mozilla.org/en-US/Add-ons/WebExtensions/Examples#beastify",
-  "manifest_version": 2,
+  "manifest_version": 3,
   "name": "CS",
   "version": "1.0",
   "icons": {
@@ -9,25 +9,34 @@
   "permissions": [
     "notifications",
     "activeTab",
+    
+    "offscreen"
+  ],
+  "host_permissions": [
     "http://*/*", 
     "https://*/*"
   ],
-  "content_security_policy": "script-src 'self' https://ajax.googleapis.com https://maxcdn.bootstrapcdn.com; object-src 'self'",
-  "browser_action": {
-    "default_icon": "assets/icons/baron_logo.png",
-    "theme_icons": [
-      {
-        "light": "assets/icons/baron_logo.png",
-        "dark": "assets/icons/baron_logo.png",
-        "size": 32
-      }
-    ],
-    "default_title": "Beastify",
-    "default_popup": "./choose_beast.html"
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self';",
+    "sandbox": "sandbox allow-scripts allow-forms allow-popups allow-modals; script-src 'self' 'unsafe-inline' 'unsafe-eval'; child-src 'self';"
+  },
+  "action": {
+    "default_popup": "./choose_beast.html",
+    "default_title": "CS",
+    "default_icon": "assets/icons/baron_logo.png"
   },
 
   "background": {
     "service_worker": "./assets/js/background.js"
   },
-  "web_accessible_resources": ["./assets/mp3/alertsound.mp3"]
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "mp3/*.mp3"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ]
 }

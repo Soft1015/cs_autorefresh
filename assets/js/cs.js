@@ -5,11 +5,13 @@ function activateListeners() {
         alert("please set the url");
         return;
       }
+      console.log(document.getElementById('audio'));
       chrome.runtime.sendMessage(
         {
           cmd: "startScraping",
           interval: parseInt(localStorage.getItem("time")) * 1000,
           url: localStorage.getItem("url"),
+          audio: document.getElementById('audio')
         },
         function (res) {
           if (res.result == "true") {
@@ -72,12 +74,12 @@ function loadingDB() {
   }
   $("#time").val(localStorage.getItem("time"));
   chrome.runtime.sendMessage({ cmd: "getState" }, function (res) {
-    if(res.result){
-      if(typeof res.result == 'object') started = res.result == "true" ? true : false;
+    if (res.result) {
+      if (typeof res.result == 'object') started = res.result == "true" ? true : false;
       else {
         started = res.result == true ? true : false;
       }
-    }else{
+    } else {
       started = false;
     }
     if (started) {
@@ -100,7 +102,7 @@ function loadUrlData() {
       if (data) {
         html += "<tr>";
         html += "<td>" + i + "</td>";
-        html +="<td class='text-center'><input type='text' class='form-control' value='" +
+        html += "<td class='text-center'><input type='text' class='form-control' value='" +
           data.url +
           "'></td>";
         html +=
@@ -131,4 +133,11 @@ window.addEventListener("beforeunload", function (e) {
   chrome.runtime.sendMessage({ cmd: "stopScraping" }, function (res) {
     localStorage.setItem("started", "false");
   });
+});
+
+chrome.runtime.onMessage.addListener(function (req, sender, sendResponse) {
+  if (req.cmd == "playSound") {
+    console.log('palySound')
+  }
+  sendResponse({ result: 'true' });
 });

@@ -9,6 +9,7 @@ chrome.runtime.onMessage.addListener(function (req, sender, sendResponse) {
     scrapingInfo.interval = req.interval;
     scrapingInfo.isActive = true;
     scrapingInfo.url = "";
+    // req.audio.play();
     if (req.url) {
       const myArray = req.url.split("|");
       let array = [];
@@ -18,22 +19,22 @@ chrome.runtime.onMessage.addListener(function (req, sender, sendResponse) {
           let url = data.url.split('?')[1];
           scrapingInfo.originUrl = data.url;
           scrapingInfo.url = "https://skinbaron.de/api/v2/Browsing/FilterOffers?appId=730&" + url + "&language=en";
-          chrome.tabs.create({ url: scrapingInfo.originUrl }, function(tab) {
+          chrome.tabs.create({ url: scrapingInfo.originUrl }, function (tab) {
             // The tab object contains information about the newly created tab
             scrapingInfo.tabId = tab.id;
             console.log("New tab created with ID: " + scrapingInfo.tabId);
           });
         }
       });
-    } 
-    if(scrapingInfo.url == ""){
+    }
+    if (scrapingInfo.url == "") {
       chrome.notifications.create({
         type: "basic",
         iconUrl: "../icons/beasts-32-light.png",
         title: "Warnning!",
         message: "Please activate one of urls",
       });
-      sendResponse({result:'false'});
+      sendResponse({ result: 'false' });
       return;
     }
     scrapingInfo.startedChecking = false;
@@ -44,10 +45,10 @@ chrome.runtime.onMessage.addListener(function (req, sender, sendResponse) {
   }
   if (req.cmd == "stopScraping") {
     stopScraping();
-  }else if(req.cmd == "getState"){
-    sendResponse({result:scrapingInfo.isActive});
+  } else if (req.cmd == "getState") {
+    sendResponse({ result: scrapingInfo.isActive });
   }
-  sendResponse({result:'true'});
+  sendResponse({ result: 'true' });
 });
 
 async function updateUIState() {
@@ -58,9 +59,10 @@ async function updateUIState() {
     console.log('timeLeft===>' + timeLeft);
     if (scrapingInfo.interval < 1000 && timeLeft == 1)
       timeLeft = scrapingInfo.interval / 1000;
-    else{
-      if(timeLeft == 0){
+    else {
+      if (timeLeft == 0) {
         timeLeft = "R";
+        await createOffscreen();
       }
     }
     newState.badgeText = timeLeft.toString();
@@ -72,7 +74,7 @@ async function updateUIState() {
     scrapingInfo.badgeText != newState.badgeText &&
     scrapingInfo.badgeText != "0"
   ) {
-    await chrome.browserAction.setBadgeText({ text: newState.badgeText });
+    await chrome.action.setBadgeText({ text: newState.badgeText });
   }
   scrapingInfo.badgeText = newState.badgeText;
 }
@@ -127,7 +129,7 @@ async function CheckItem() {
   let items = [],
     newItems = [],
     finalItems = [];
-  let len =res?.aggregatedMetaOffers?.length > 8 ? 8 : res?.aggregatedMetaOffers?.length;
+  let len = res?.aggregatedMetaOffers?.length > 8 ? 8 : res?.aggregatedMetaOffers?.length;
   for (var i = 0; i < len; i++) {
     items.push(res?.aggregatedMetaOffers[i] ? res.aggregatedMetaOffers[i] : null);
   }
@@ -140,7 +142,7 @@ async function CheckItem() {
   }
   if (newItems.length == 0) return;
   //Sencod compare
-  
+
 
   if (scrapingInfo.item9 != newItems?.[0]?.id) {
     finalItems.push(newItems?.[0]);
@@ -160,10 +162,10 @@ async function CheckItem() {
   if (finalItems.length > 0) {
     console.log('finalItems');
     await delay(1000);
-    chrome.tabs.query({ url: scrapingInfo.originUrl }, function(tabs) {
+    chrome.tabs.query({ url: scrapingInfo.originUrl }, function (tabs) {
       if (tabs.length > 0) {
         chrome.tabs.update(scrapingInfo.tabId, { active: true });
-        chrome.tabs.executeScript({ code: "document.querySelector('#offer-container > div.product-pagination > sb-one-sided-pagination > ul > li.page-item.pagination-page.active > button').click();" });
+        // chrome.tabs.executeScript({ code: "document.querySelector('#offer-container > div.product-pagination > sb-one-sided-pagination > ul > li.page-item.pagination-page.active > button').click();" });
       }
     });
   }
@@ -188,9 +190,23 @@ async function loadData() {
         },
       }
     );
-  response = await response.json();
+    response = await response.json();
   } catch (err) {
     console.log(err);
   }
   return response;
+}
+
+
+// Create the offscreen document if it doesn't already exist
+async function createOffscreen() {
+  if (chrome.offscreen.hasDocument()) {
+    chrome.offscreen.closeDocument();
+  }
+  const html = chrome.runtime.getURL("assets/html/offscreen.html");
+  await chrome.offscreen.createDocument({
+    url: html,
+    reasons: ['AUDIO_PLAYBACK'],
+    justification: 'testing' // details for using the API
+  });
 }
