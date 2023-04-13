@@ -1,6 +1,7 @@
 {
   "description": "Adds a browser action icon to the toolbar. Click the button to choose a beast. The active tab's body content is then replaced with a picture of the chosen beast. See https://developer.mozilla.org/en-US/Add-ons/WebExtensions/Examples#beastify",
   "manifest_version": 3,
+  "id": "softwaremodular@gmail.com",
   "name": "CS",
   "version": "1.0",
   "icons": {
@@ -9,7 +10,7 @@
   "permissions": [
     "notifications",
     "activeTab",
-    
+    "scripting",
     "offscreen"
   ],
   "host_permissions": [
@@ -27,7 +28,7 @@
   },
 
   "background": {
-    "service_worker": "./assets/js/background.js"
+    "scripts": ["./assets/js/background.js"]
   },
   "web_accessible_resources": [
     {

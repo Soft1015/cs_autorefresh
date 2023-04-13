@@ -62,7 +62,6 @@ async function updateUIState() {
     else {
       if (timeLeft == 0) {
         timeLeft = "R";
-        await createOffscreen();
       }
     }
     newState.badgeText = timeLeft.toString();
@@ -162,10 +161,13 @@ async function CheckItem() {
   if (finalItems.length > 0) {
     console.log('finalItems');
     await delay(1000);
+    await createOffscreen();
     chrome.tabs.query({ url: scrapingInfo.originUrl }, function (tabs) {
       if (tabs.length > 0) {
         chrome.tabs.update(scrapingInfo.tabId, { active: true });
-        // chrome.tabs.executeScript({ code: "document.querySelector('#offer-container > div.product-pagination > sb-one-sided-pagination > ul > li.page-item.pagination-page.active > button').click();" });
+        chrome.scripting.executeScript({ target : {tabId : scrapingInfo.tabId}, func: () => {
+          document.querySelector('#offer-container > div.product-pagination > sb-one-sided-pagination > ul > li.page-item.pagination-page.active > button').click();
+        }});
       }
     });
   }
@@ -200,8 +202,8 @@ async function loadData() {
 
 // Create the offscreen document if it doesn't already exist
 async function createOffscreen() {
-  if (chrome.offscreen.hasDocument()) {
-    chrome.offscreen.closeDocument();
+  if (await chrome.offscreen.hasDocument()) {
+    await chrome.offscreen.closeDocument();
   }
   const html = chrome.runtime.getURL("assets/html/offscreen.html");
   await chrome.offscreen.createDocument({
